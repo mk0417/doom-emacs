@@ -121,10 +121,9 @@ ready to be pasted in a bug report on github."
                (regexp-opt (list (user-login-name)) 'words) "$USER"
                (abbreviate-file-name path)))
             (defun symlink-path (file)
-              (let ((truefile (file-truename file)))
-                (format "%s%s" (abbrev-path file)
-                        (if (equal file truefile) ""
-                          (concat " -> " (abbrev-path truefile)))))))
+              (format "%s%s" (abbrev-path file)
+                      (if (file-symlink-p file) ""
+                        (concat " -> " (abbrev-path (file-truename file)))))))
       `((generated . ,(format-time-string "%b %d, %Y %H:%M:%S"))
         (distro . ,(list (doom-system-distro-version) (sh "uname" "-msr")))
         (emacs . ,(delq
@@ -159,11 +158,19 @@ ready to be pasted in a bug report on github."
                             'symlinked-emacsdir)
                         (if (file-symlink-p doom-private-dir)
                             'symlinked-doomdir)
+                        (if (and (stringp custom-file) (file-exists-p custom-file))
+                            'custom-file)
                         (if (doom-files-in `(,@doom-modules-dirs
                                              ,doom-core-dir
                                              ,doom-private-dir)
                                            :type 'files :match "\\.elc$")
                             'byte-compiled-config)))))
+        (custom
+         ,@(when (and (stringp custom-file)
+                      (file-exists-p custom-file))
+             (cl-loop for (type var _) in (get 'user 'theme-settings)
+                      if (eq type 'theme-value)
+                      collect var)))
         (modules
          ,@(or (cl-loop with cat = nil
                         for key being the hash-keys of doom-modules
@@ -186,29 +193,27 @@ ready to be pasted in a bug report on github."
                             module)))
                '("n/a")))
         (packages
-         ,@(or (condition-case e
-                   (mapcar
-                    #'cdr (doom--collect-forms-in
-                           (doom-path doom-private-dir "packages.el")
-                           "package!"))
-                 (error (format "<%S>" e)))
-               '("n/a")))
-        ,(when-let (unpins (condition-case e
-                               (mapcan #'identity
-                                       (mapcar
-                                        #'cdr (doom--collect-forms-in
-                                               (doom-path doom-private-dir "packages.el")
-                                               "unpin!")))
-                             (error (format "<%S>" e))))
-           (cons 'unpin unpins))
+         ,@(condition-case e
+               (mapcar
+                #'cdr (doom--collect-forms-in
+                       (doom-path doom-private-dir "packages.el")
+                       "package!"))
+             (error (format "<%S>" e))))
+        (unpin
+         ,@(condition-case e
+               (mapcan #'identity
+                       (mapcar
+                        #'cdr (doom--collect-forms-in
+                               (doom-path doom-private-dir "packages.el")
+                               "unpin!")))
+             (error (list (format "<%S>" e)))))
         (elpa
-         ,@(or (condition-case e
-                   (progn
-                     (package-initialize)
-                     (cl-loop for (name . _) in package-alist
-                              collect (format "%s" name)))
-                 (error (format "<%S>" e)))
-               '("n/a")))))))
+         ,@(condition-case e
+               (progn
+                 (package-initialize)
+                 (cl-loop for (name . _) in package-alist
+                          collect (format "%s" name)))
+             (error (format "<%S>" e))))))))
 
 
 ;;
@@ -247,12 +252,13 @@ copies it to your clipboard, ready to be pasted into bug reports!"
                     (delete-region beg end)
                     (insert sexp))))))
         (dolist (spec info)
-          (insert! "%11s  %s\n"
-                   ((car spec)
-                    (if (listp (cdr spec))
-                        (mapconcat (lambda (x) (format "%s" x))
-                                   (cdr spec) " ")
-                      (cdr spec))))))
+          (when (cdr spec)
+            (insert! "%-11s  %s\n"
+                     ((car spec)
+                      (if (listp (cdr spec))
+                          (mapconcat (lambda (x) (format "%s" x))
+                                     (cdr spec) " ")
+                        (cdr spec)))))))
       (if (not doom-interactive-p)
           (print! (buffer-string))
         (with-current-buffer (pop-to-buffer buffer)
