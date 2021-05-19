@@ -23,7 +23,8 @@ debian, and derivatives). On most it's 'fd'.")
   :commands (projectile-project-root
              projectile-project-name
              projectile-project-p
-             projectile-locate-dominating-file)
+             projectile-locate-dominating-file
+             projectile-relevant-known-projects)
   :init
   (setq projectile-cache-file (concat doom-cache-dir "projectile.cache")
         ;; Auto-discovery is slow to do by default. Better to update the list
@@ -34,7 +35,7 @@ debian, and derivatives). On most it's 'fd'.")
         projectile-globally-ignored-file-suffixes '(".elc" ".pyc" ".o")
         projectile-kill-buffers-filter 'kill-only-files
         projectile-known-projects-file (concat doom-cache-dir "projectile.projects")
-        projectile-ignored-projects (list "~/" temporary-file-directory)
+        projectile-ignored-projects '("~/")
         projectile-ignored-project-function #'doom-project-ignored-p)
 
   (global-set-key [remap evil-jump-to-tag] #'projectile-find-tag)
